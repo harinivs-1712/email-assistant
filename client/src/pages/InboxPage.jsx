@@ -74,7 +74,18 @@ const InboxPage = () => {
   useEffect(() => {
     fetchEmails(activeFolder);
     fetchStats();
-  }, [activeFolder, fetchEmails, fetchStats]);
+
+    // Periodic background sync so incoming / newly seeded emails appear immediately
+    const pollInterval = setInterval(() => {
+      if (searchQuery.trim()) return;
+      emailService.getByFolder(activeFolder).then((res) => {
+        if (res.data) setEmails(res.data);
+      }).catch(() => {});
+      fetchStats();
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [activeFolder, fetchEmails, fetchStats, searchQuery]);
 
   // ─── Search input handling ─────────────────────────────────────────────────
   const handleSearchChange = (e) => {

@@ -560,6 +560,15 @@ def read_email_attachment(email_id: str, filename: str) -> Dict[str, Any]:
                 break
 
         if not matched:
+            target_base = target_fn.split('.')[0]
+            for att in email.get("attachments", []):
+                fn = att.get("filename", "").strip().lower()
+                fn_base = fn.split('.')[0]
+                if target_fn in fn or fn in target_fn or (target_base and target_base in fn_base):
+                    matched = att
+                    break
+
+        if not matched:
             return {
                 "success": False,
                 "error": f"Attachment '{filename}' not found in email '{email_id}'.",

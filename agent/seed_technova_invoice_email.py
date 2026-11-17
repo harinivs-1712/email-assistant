@@ -75,9 +75,9 @@ def seed_invoice_email():
         "is_starred": False,
         "attachments": [
             {
-                "filename": "technova_invoice_INV-2026-1042.pdf",
-                "mimetype": "application/pdf",
-                "size": len(invoice_content),
+                "filename": "TechNova_Invoice_Natural_Embedded_Injection_(2).docx",
+                "mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "size": 37435,
                 "url": "/documents/DOC_INVOICE_TECHNOVA",
                 "doc_id": "DOC_INVOICE_TECHNOVA",
                 "content": invoice_content
