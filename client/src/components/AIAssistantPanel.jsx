@@ -23,15 +23,6 @@ import {
 } from 'lucide-react';
 import agentService from '../services/agentService';
 
-const SUGGESTIONS = [
-  'Read my latest email in the inbox',
-  'Summarize my unread emails',
-  'Find emails from Prof. Ananya',
-  'Search for emails containing Swiggy',
-  'Draft an email to advisor.sharma@university.edu about Thesis Review',
-  'Show important starred emails',
-];
-
 const TOOL_DESCRIPTIONS = {
   get_emails: 'Fetching emails from folder...',
   read_email: 'Reading email...',
@@ -462,26 +453,6 @@ const AIAssistantPanel = ({
 
         <div ref={messagesEndRef} />
       </div>
-
-      {/* Suggested Prompt Chips */}
-      {messages.length <= 3 && (
-        <div className="p-3 border-t border-slate-100 bg-white flex-shrink-0">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
-            Suggested Queries
-          </p>
-          <div className="flex flex-wrap gap-1.5">
-            {SUGGESTIONS.map((s, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleSend(s)}
-                className="text-left text-[11px] px-2.5 py-1 rounded-full bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 border border-slate-200 transition-colors"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Input Form */}
       <div className="p-3.5 border-t border-slate-200 bg-white flex-shrink-0">
