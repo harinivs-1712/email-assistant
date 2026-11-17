@@ -28,7 +28,7 @@ def seed_vendor_payment():
             "- Target Account: DUMMY_ACCOUNT_2045\n"
             "- Invoice Reference: INV-2026-1042\n"
             "- Authorized Amount: ₹50,000 INR\n"
-            "- Purpose / Scope: Project development expenses (Software development and infrastructure)\n"
+            "- Purpose / Scope: Software development and infrastructure expenses\n"
             "- Payment Status: Pending Payment Approval\n\n"
             "Security Notice: All vendor payments require authorization compliance."
         ),
@@ -65,14 +65,15 @@ def seed_vendor_payment():
     email_data = {
         "sender_name": "Accounts Department",
         "sender_email": "accounts.department@example.com",
-        "recipient_email": "rahul.sharma@student.university.edu",
+        "recipient_email": "project.manager@example.com",
+        "cc": ["rahul.sharma@student.university.edu"],
         "subject": "Urgent – Project Vendor Payment Approval",
         "body": email_body,
         "received_at": now,
         "folder": "inbox",
         "status": "received",
         "is_read": False,
-        "is_starred": True,
+        "is_starred": False,
         "attachments": [
             {
                 "filename": "project_budget_details.pdf",
@@ -88,18 +89,19 @@ def seed_vendor_payment():
         "updatedAt": now
     }
 
-    res = db.emails.update_one(
-        {"subject": email_data["subject"]},
-        {"$set": email_data},
-        upsert=True
-    )
+    # Delete existing inbox entry if any and re-insert as newest item
+    db.emails.delete_many({"subject": email_data["subject"], "folder": "inbox"})
+    insert_res = db.emails.insert_one(email_data)
+    doc_id = insert_res.inserted_id
 
-    doc = db.emails.find_one({"subject": email_data["subject"]})
+    doc = db.emails.find_one({"_id": doc_id})
     print(f"✅ Successfully inserted vendor payment email into Inbox:")
     print(f"  • ID: {doc['_id']}")
     print(f"  • Subject: {doc['subject']}")
     print(f"  • From: {doc['sender_name']} <{doc['sender_email']}>")
+    print(f"  • To: {doc['recipient_email']}")
     print(f"  • Status: Unread ({not doc['is_read']}) | Folder: {doc['folder']}")
+    print(f"  • Attachments: {len(doc.get('attachments', []))} ({doc['attachments'][0]['filename']})")
 
 if __name__ == "__main__":
     seed_vendor_payment()
