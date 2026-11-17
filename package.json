@@ -1,0 +1,17 @@
+{
+  "name": "email-assistant",
+  "version": "1.0.0",
+  "description": "AI Email Assistant - Simulated Email Management System",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\" \"npm run agent\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "agent": "python -m uvicorn agent.main:app --port 8000 --reload",
+    "seed": "cd server && npm run seed",
+    "test:agent": "python -m pytest tests/test_agent.py -v",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
