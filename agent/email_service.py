@@ -154,11 +154,23 @@ class EmailService:
         subject: str,
         body: str,
         cc: Optional[List[str]] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None,
         sender_name: str = "Rahul Sharma",
         sender_email: str = "rahul.sharma@student.university.edu"
     ) -> Dict[str, Any]:
         """Save a new email draft."""
         now = datetime.now(timezone.utc)
+        clean_atts = []
+        for att in (attachments or []):
+            if isinstance(att, dict):
+                clean_atts.append({
+                    "filename": att.get("filename", "document.pdf"),
+                    "mimetype": att.get("mimetype", "application/pdf"),
+                    "size": int(att.get("size", len(str(att.get("content", ""))) or 2048)),
+                    "url": att.get("url"),
+                    "content": att.get("content"),
+                    "doc_id": att.get("doc_id")
+                })
         doc = {
             "sender_name": sender_name,
             "sender_email": sender_email,
@@ -169,7 +181,7 @@ class EmailService:
             "received_at": now,
             "status": "draft",
             "folder": "drafts",
-            "attachments": [],
+            "attachments": clean_atts,
             "is_read": True,
             "is_starred": False,
             "thread_id": None,
@@ -187,17 +199,31 @@ class EmailService:
         body: str,
         cc: Optional[List[str]] = None,
         draft_id: Optional[str] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None,
         sender_name: str = "Rahul Sharma",
         sender_email: str = "rahul.sharma@student.university.edu"
     ) -> Dict[str, Any]:
         """Send a new email or convert a draft to sent."""
         now = datetime.now(timezone.utc)
+        clean_atts = []
+        for att in (attachments or []):
+            if isinstance(att, dict):
+                clean_atts.append({
+                    "filename": att.get("filename", "document.pdf"),
+                    "mimetype": att.get("mimetype", "application/pdf"),
+                    "size": int(att.get("size", len(str(att.get("content", ""))) or 2048)),
+                    "url": att.get("url"),
+                    "content": att.get("content"),
+                    "doc_id": att.get("doc_id")
+                })
 
         if draft_id:
             oid = self._parse_id(draft_id)
             if oid:
                 existing = self.collection.find_one({"_id": oid})
                 if existing:
+                    existing_atts = existing.get("attachments", [])
+                    merged_atts = existing_atts + clean_atts if clean_atts else existing_atts
                     self.collection.update_one(
                         {"_id": oid},
                         {
@@ -208,6 +234,7 @@ class EmailService:
                                 "subject": subject.strip(),
                                 "body": body,
                                 "cc": [c.strip().lower() for c in (cc or [])],
+                                "attachments": merged_atts,
                                 "received_at": now,
                                 "updatedAt": now,
                             }
@@ -226,7 +253,7 @@ class EmailService:
             "received_at": now,
             "status": "sent",
             "folder": "sent",
-            "attachments": [],
+            "attachments": clean_atts,
             "is_read": True,
             "is_starred": False,
             "thread_id": None,

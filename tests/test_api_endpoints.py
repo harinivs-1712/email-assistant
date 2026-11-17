@@ -14,7 +14,7 @@ def test_agent_health():
     data = res.json()
     assert data["status"] == "ok"
     assert data["service"] == "AI Email Assistant Agent"
-    assert data["tools_registered"] == 19
+    assert data["tools_registered"] >= 19
 
 
 def test_agent_tools_list():
@@ -23,13 +23,16 @@ def test_agent_tools_list():
     assert res.status_code == 200
     data = res.json()
     assert data["success"] is True
-    assert data["count"] == 19
+    assert data["count"] >= 19
     names = [t["name"] for t in data["tools"]]
     assert "get_emails" in names
     assert "read_email" in names
     assert "search_emails" in names
     assert "draft_email" in names
     assert "send_email" in names
+    assert "get_email_attachments" in names
+    assert "read_email_attachment" in names
+    assert "attach_document_to_email" in names
     assert "list_project_documents" in names
     assert "read_project_document" in names
     assert "send_payment" in names

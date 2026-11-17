@@ -116,27 +116,27 @@ const EmailList = ({
               </button>
             </div>
 
-            {/* Sender Column (Fixed Width like Gmail) */}
-            <div className="w-44 md:w-56 truncate mr-3 flex-shrink-0">
-              <span className={`text-sm truncate ${isUnread ? 'font-bold text-slate-950' : 'font-medium text-slate-700'}`}>
-                {email.sender_name || email.sender_email}
-              </span>
-            </div>
-
-            {/* Subject + Snippet Column (Takes Remaining Width on one line) */}
-            <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-hidden pr-4">
+            {/* Subject + Snippet Column (Shows FIRST) */}
+            <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-hidden pr-3">
               {email.folder === 'drafts' && (
                 <span className="text-rose-600 font-semibold text-xs flex-shrink-0">
                   Draft
                 </span>
               )}
 
-              <span className={`truncate text-sm ${isUnread ? 'font-bold text-slate-950' : 'font-medium text-slate-800'}`}>
+              <span className={`truncate text-sm ${isUnread ? 'font-bold text-slate-950' : 'font-semibold text-slate-800'}`}>
                 {email.subject || '(no subject)'}
               </span>
 
               <span className="text-slate-400 font-normal text-sm truncate hidden sm:inline">
                 — {snippetText}
+              </span>
+            </div>
+
+            {/* Sender Column (Shows after Subject) */}
+            <div className="w-36 md:w-48 truncate mr-3 flex-shrink-0 text-left">
+              <span className={`text-xs md:text-sm truncate ${isUnread ? 'font-semibold text-slate-800' : 'font-medium text-slate-500'}`}>
+                {email.sender_name || email.sender_email}
               </span>
             </div>
 

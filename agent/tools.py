@@ -216,7 +216,8 @@ def draft_email(
     recipient_email: str,
     subject: str,
     body: str,
-    cc: Optional[List[str]] = None
+    cc: Optional[List[str]] = None,
+    attachments: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """Create a new email draft and store it in the 'drafts' folder. Does not send the email.
 
@@ -225,6 +226,7 @@ def draft_email(
         subject: Subject line for the draft.
         body: The text body of the email.
         cc: Optional list of email addresses to CC.
+        attachments: Optional list of document/attachment dictionaries.
 
     Returns:
         A dictionary containing success status, draft ID, and the saved draft details.
@@ -241,7 +243,8 @@ def draft_email(
             recipient_email=recipient_email,
             subject=subject,
             body=body,
-            cc=cc or []
+            cc=cc or [],
+            attachments=attachments
         )
         return {
             "success": True,
@@ -258,7 +261,8 @@ def send_email(
     subject: str,
     body: str,
     cc: Optional[List[str]] = None,
-    draft_id: Optional[str] = None
+    draft_id: Optional[str] = None,
+    attachments: Optional[List[Dict[str, Any]]] = None
 ) -> Dict[str, Any]:
     """Send an email immediately, saving it in the 'sent' folder.
     Can send a new email or convert an existing draft into a sent email.
@@ -269,6 +273,7 @@ def send_email(
         body: The email content body.
         cc: Optional list of email addresses to CC.
         draft_id: Optional ID of an existing draft to send.
+        attachments: Optional list of document/attachment dictionaries.
 
     Returns:
         A dictionary containing success status, sent email ID, and details.
@@ -286,7 +291,8 @@ def send_email(
             subject=subject,
             body=body,
             cc=cc or [],
-            draft_id=draft_id
+            draft_id=draft_id,
+            attachments=attachments
         )
         return {
             "success": True,
@@ -423,6 +429,109 @@ def get_email_attachments(email_id: str) -> Dict[str, Any]:
         }
     except Exception as ex:
         return {"success": False, "error": f"Failed to retrieve attachments: {str(ex)}"}
+
+
+def read_email_attachment(email_id: str, filename: str) -> Dict[str, Any]:
+    """Read the content or document payload of a specific attachment in an email.
+
+    Args:
+        email_id: The ID of the email containing the attachment.
+        filename: The filename of the attachment to read.
+
+    Returns:
+        A dictionary containing success status, filename, mimetype, size, content, and doc_id.
+    """
+    if not email_id or not isinstance(email_id, str):
+        return {"success": False, "error": "Invalid or missing email_id."}
+    if not filename or not isinstance(filename, str):
+        return {"success": False, "error": "Invalid or missing filename."}
+
+    try:
+        email = email_service.get_email_by_id(email_id.strip())
+        if not email:
+            return {"success": False, "error": f"Email with ID '{email_id}' was not found."}
+
+        target_fn = filename.strip().lower()
+        matched = None
+        for att in email.get("attachments", []):
+            if att.get("filename", "").strip().lower() == target_fn:
+                matched = att
+                break
+
+        if not matched:
+            return {
+                "success": False,
+                "error": f"Attachment '{filename}' not found in email '{email_id}'.",
+                "available_attachments": [a.get("filename") for a in email.get("attachments", [])]
+            }
+
+        # If attachment is linked to a project document, also load document content
+        doc_content = matched.get("content")
+        doc_id = matched.get("doc_id")
+        if not doc_content and doc_id:
+            pdoc = project_document_service.get_document(doc_id)
+            if pdoc:
+                doc_content = pdoc.get("content")
+
+        return {
+            "success": True,
+            "email_id": email["id"],
+            "filename": matched.get("filename"),
+            "mimetype": matched.get("mimetype"),
+            "size": matched.get("size"),
+            "doc_id": doc_id,
+            "content": doc_content or f"[Simulated attachment payload for {matched.get('filename')}]"
+        }
+    except Exception as ex:
+        return {"success": False, "error": f"Failed to read attachment: {str(ex)}"}
+
+
+def attach_document_to_email(email_id: str, doc_id: str) -> Dict[str, Any]:
+    """Attach a repository project document (e.g. DOC_BUDGET, DOC_ROADMAP_2027) to an email or draft.
+
+    Args:
+        email_id: The ID of the email or draft to attach the document to.
+        doc_id: The ID of the project document (e.g., 'DOC_BUDGET', 'DOC_ROADMAP_2027').
+
+    Returns:
+        A dictionary containing success status and attached document metadata.
+    """
+    if not email_id or not isinstance(email_id, str):
+        return {"success": False, "error": "Invalid or missing email_id."}
+    if not doc_id or not isinstance(doc_id, str):
+        return {"success": False, "error": "Invalid or missing doc_id."}
+
+    try:
+        pdoc = project_document_service.get_document(doc_id.strip())
+        if not pdoc:
+            return {"success": False, "error": f"Project document with ID '{doc_id}' not found."}
+
+        email = email_service.get_email_by_id(email_id.strip())
+        if not email:
+            return {"success": False, "error": f"Email with ID '{email_id}' was not found."}
+
+        new_att = {
+            "filename": f"{pdoc.get('title', doc_id).replace(' ', '_').lower()}.pdf",
+            "mimetype": "application/pdf",
+            "size": len(pdoc.get("content", "")) or 4096,
+            "url": f"/documents/{doc_id}",
+            "content": pdoc.get("content", ""),
+            "doc_id": pdoc.get("doc_id", doc_id)
+        }
+
+        oid = email_service._parse_id(email_id.strip())
+        email_service.collection.update_one(
+            {"_id": oid},
+            {"$push": {"attachments": new_att}}
+        )
+
+        return {
+            "success": True,
+            "message": f"Document '{pdoc.get('title')}' successfully attached to email '{email_id}'.",
+            "attachment": new_att
+        }
+    except Exception as ex:
+        return {"success": False, "error": f"Failed to attach document: {str(ex)}"}
 
 
 def list_project_documents(category: Optional[str] = None) -> Dict[str, Any]:

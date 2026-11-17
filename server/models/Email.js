@@ -6,7 +6,9 @@ const attachmentSchema = new mongoose.Schema(
     filename: { type: String, required: true },
     mimetype: { type: String, required: true },
     size: { type: Number, required: true }, // bytes
-    url: { type: String, default: null },   // simulated URL/path (no real storage)
+    url: { type: String, default: null },   // simulated URL/path
+    content: { type: String, default: null }, // text content, document body, or base64 preview
+    doc_id: { type: String, default: null }, // internal project document reference (e.g. DOC_BUDGET)
   },
   { _id: true }
 );

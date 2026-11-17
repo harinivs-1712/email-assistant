@@ -15,6 +15,9 @@ import {
   ExternalLink,
   Send,
   CornerDownLeft,
+  Eye,
+  FileText,
+  X,
 } from 'lucide-react';
 
 const formatFullDate = (isoString) => {
@@ -52,6 +55,20 @@ const EmailPane = ({
 }) => {
   const [quickReplyText, setQuickReplyText] = useState('');
   const [showQuickReply, setShowQuickReply] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
+
+  const handleDownloadAttachment = (att) => {
+    const content = att.content || `[Attachment: ${att.filename} - Content simulated]`;
+    const blob = new Blob([content], { type: att.mimetype || 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = att.filename || 'download';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
 
   if (!email) return null;
 
@@ -223,31 +240,42 @@ const EmailPane = ({
           <div className="mt-6 pt-6 border-t border-slate-100">
             <p className="text-xs font-semibold text-slate-700 mb-3 flex items-center gap-1.5">
               <Paperclip className="w-4 h-4 text-slate-400" />
-              <span>{email.attachments.length} Attachment(s)</span>
+              <span>{email.attachments.length} Attachment(s) / Document(s)</span>
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
               {email.attachments.map((att, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors"
+                  onClick={() => setPreviewAttachment(att)}
+                  className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer group"
                 >
                   <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs flex-shrink-0">
-                    PDF
+                    {att.doc_id ? 'DOC' : (att.filename.split('.').pop() || 'FILE').toUpperCase().slice(0, 4)}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-slate-800 truncate">
+                    <p className="text-xs font-medium text-slate-800 truncate group-hover:text-indigo-600 transition-colors" title={att.filename}>
                       {att.filename}
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      {formatFileSize(att.size)}
+                      {formatFileSize(att.size)} {att.doc_id ? `• ${att.doc_id}` : ''}
                     </p>
                   </div>
-                  <button
-                    title="Download"
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      title="Preview Document"
+                      onClick={() => setPreviewAttachment(att)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      title="Download"
+                      onClick={() => handleDownloadAttachment(att)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -273,6 +301,61 @@ const EmailPane = ({
           </button>
         </div>
       </div>
+
+      {/* Document / Attachment Viewer Modal */}
+      {previewAttachment && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+          onClick={() => setPreviewAttachment(null)}
+        >
+          <div
+            className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                <div className="min-w-0">
+                  <h4 className="text-sm font-bold text-slate-800 truncate">
+                    {previewAttachment.filename}
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    {formatFileSize(previewAttachment.size)} • {previewAttachment.mimetype || 'document'}
+                    {previewAttachment.doc_id ? ` • Doc ID: ${previewAttachment.doc_id}` : ''}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadAttachment(previewAttachment)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download</span>
+                </button>
+                <button
+                  onClick={() => setPreviewAttachment(null)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 font-mono text-xs text-slate-800 whitespace-pre-wrap leading-relaxed bg-slate-50/30">
+              {previewAttachment.content ? (
+                previewAttachment.content
+              ) : (
+                <div className="text-center py-12 text-slate-400 font-sans">
+                  <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                  <p className="font-medium text-slate-600">Simulated Binary Document</p>
+                  <p className="text-xs mt-1">This attachment is registered in the database. Use Download to retrieve the file.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

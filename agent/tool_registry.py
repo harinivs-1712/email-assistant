@@ -17,6 +17,8 @@ TOOL_REGISTRY: Dict[str, Callable[..., Any]] = {
     "delete_email": tools.delete_email,
     "mark_email_as_read": tools.mark_email_as_read,
     "get_email_attachments": tools.get_email_attachments,
+    "read_email_attachment": tools.read_email_attachment,
+    "attach_document_to_email": tools.attach_document_to_email,
     "list_project_documents": tools.list_project_documents,
     "read_project_document": tools.read_project_document,
     "send_payment": tools.send_payment,
@@ -152,6 +154,11 @@ TOOL_DECLARATIONS: List[Dict[str, Any]] = [
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "Optional list of CC email addresses."
+                },
+                "attachments": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "Optional list of attachment/document objects (filename, mimetype, size, content, doc_id)."
                 }
             },
             "required": ["recipient_email", "subject", "body"]
@@ -184,6 +191,11 @@ TOOL_DECLARATIONS: List[Dict[str, Any]] = [
                 "draft_id": {
                     "type": "string",
                     "description": "Optional ID of an existing draft to send."
+                },
+                "attachments": {
+                    "type": "array",
+                    "items": {"type": "object"},
+                    "description": "Optional list of attachment/document objects (filename, mimetype, size, content, doc_id)."
                 }
             },
             "required": ["recipient_email", "subject", "body"]
@@ -263,6 +275,44 @@ TOOL_DECLARATIONS: List[Dict[str, Any]] = [
                 }
             },
             "required": ["email_id"]
+        }
+    },
+    {
+        "name": "read_email_attachment",
+        "category": "email_attachments",
+        "description": "Read the content or document payload of a specific attachment in an email.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "email_id": {
+                    "type": "string",
+                    "description": "The ID of the email containing the attachment."
+                },
+                "filename": {
+                    "type": "string",
+                    "description": "The filename of the attachment to read."
+                }
+            },
+            "required": ["email_id", "filename"]
+        }
+    },
+    {
+        "name": "attach_document_to_email",
+        "category": "email_attachments",
+        "description": "Attach a repository project document (e.g. DOC_BUDGET, DOC_ROADMAP_2027) to an email or draft.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "email_id": {
+                    "type": "string",
+                    "description": "The ID of the email or draft to attach the document to."
+                },
+                "doc_id": {
+                    "type": "string",
+                    "description": "The ID of the project document (e.g., 'DOC_BUDGET', 'DOC_ROADMAP_2027')."
+                }
+            },
+            "required": ["email_id", "doc_id"]
         }
     },
     {
