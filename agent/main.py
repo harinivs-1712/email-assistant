@@ -19,11 +19,16 @@ import uvicorn
 
 from agent.agent import email_agent
 from agent.conversation_manager import conversation_manager
+from agent.firewall_manager import firewall_manager
 from agent.gemini_service import gemini_service
 from agent.tool_registry import get_tool_declarations
 
 
 # ─── Pydantic Schemas ──────────────────────────────────────────────────────────
+
+class SetFirewallRequest(BaseModel):
+    enabled: bool = Field(..., description="Whether the firewall should be included (True) or absent (False)")
+
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="Natural language prompt for the Email Assistant")
@@ -140,6 +145,24 @@ async def get_tools():
         "count": len(get_tool_declarations()),
         "tools": get_tool_declarations()
     }
+
+
+@app.get("/api/agent/firewall")
+async def get_firewall_status():
+    """Retrieve current security firewall inclusion status (INCLUDED / ABSENT)."""
+    return firewall_manager.get_status()
+
+
+@app.post("/api/agent/firewall/toggle")
+async def toggle_firewall():
+    """Toggle the security firewall between INCLUDED and ABSENT."""
+    return firewall_manager.toggle()
+
+
+@app.post("/api/agent/firewall/set")
+async def set_firewall_status(req: SetFirewallRequest):
+    """Explicitly set the security firewall inclusion status."""
+    return firewall_manager.set_state(req.enabled)
 
 
 @app.get("/api/agent/health")

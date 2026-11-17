@@ -31,6 +31,16 @@ export const agentService = {
   // Health & model info
   getHealth: () =>
     api.get('/agent/health').then((r) => r.data),
+
+  // Security Firewall inclusion / absence management
+  getFirewallStatus: () =>
+    api.get('/agent/firewall').then((r) => r.data),
+
+  toggleFirewall: () =>
+    api.post('/agent/firewall/toggle').then((r) => r.data),
+
+  setFirewall: (enabled) =>
+    api.post('/agent/firewall/set', { enabled }).then((r) => r.data),
 };
 
 export default agentService;

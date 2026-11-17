@@ -22,6 +22,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import agentService from '../services/agentService';
+import FirewallToggleButton from './FirewallToggleButton';
 
 const AIAssistantPanel = ({
   isOpen,
@@ -166,7 +167,8 @@ const AIAssistantPanel = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5">
+          <FirewallToggleButton compact />
           <button
             onClick={handleClear}
             title="Clear Conversation"

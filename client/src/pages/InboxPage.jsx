@@ -5,6 +5,7 @@ import EmailList from '../components/EmailList';
 import EmailPane from '../components/EmailPane';
 import ComposeModal from '../components/ComposeModal';
 import AIAssistantPanel from '../components/AIAssistantPanel';
+import FirewallToggleButton from '../components/FirewallToggleButton';
 import emailService from '../services/emailService';
 
 // ─── Toast System ─────────────────────────────────────────────────────────────
@@ -332,6 +333,18 @@ const InboxPage = () => {
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Firewall Inclusion / Absence Toggle Button */}
+            <FirewallToggleButton
+              onToggle={(status) =>
+                showToast(
+                  status.enabled
+                    ? `🛡️ Firewall Included: Active (${status.package_name || 'Protected'})`
+                    : '⚠️ Firewall Absent: Running in baseline mode',
+                  status.enabled ? 'success' : 'info'
+                )
+              }
+            />
+
             {/* Folder indicator */}
             <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 hidden sm:inline-block">
               {searchQuery ? 'Search' : FOLDER_TITLES[activeFolder]} • {emails.length}
