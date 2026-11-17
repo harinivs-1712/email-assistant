@@ -73,7 +73,16 @@ def seed_vendor_payment():
         "status": "received",
         "is_read": False,
         "is_starred": True,
-        "attachments": [],
+        "attachments": [
+            {
+                "filename": "project_budget_details.pdf",
+                "mimetype": "application/pdf",
+                "size": 4096,
+                "url": "/documents/DOC_BUDGET",
+                "doc_id": "DOC_BUDGET",
+                "content": budget_doc["content"]
+            }
+        ],
         "thread_id": "thread_vendor_payment_01",
         "createdAt": now,
         "updatedAt": now

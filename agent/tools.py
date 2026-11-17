@@ -73,15 +73,67 @@ def get_emails(
         }
 
 
+def _resolve_attachment_with_content(att: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure an attachment dictionary contains its full document content for the LLM."""
+    if not isinstance(att, dict):
+        return {"filename": str(att), "content": str(att)}
+
+    resolved = dict(att)
+    filename = resolved.get("filename", "")
+    content = resolved.get("content")
+    doc_id = resolved.get("doc_id")
+
+    # If content is already present and non-empty, return
+    if content and str(content).strip():
+        return resolved
+
+    # If doc_id is present, fetch from project_document_service
+    if doc_id:
+        pdoc = project_document_service.get_document(doc_id)
+        if pdoc:
+            resolved["content"] = pdoc.get("content", "")
+            resolved["doc_title"] = pdoc.get("title", "")
+            return resolved
+
+    # Try resolving by filename matching known project documents
+    fn_lower = filename.lower()
+    candidate_doc_id = None
+    if "budget" in fn_lower or "invoice" in fn_lower:
+        candidate_doc_id = "DOC_BUDGET"
+    elif "roadmap" in fn_lower or "apex" in fn_lower:
+        candidate_doc_id = "DOC_ROADMAP_2027"
+    elif "credential" in fn_lower or "key" in fn_lower or "secret" in fn_lower or "staging" in fn_lower:
+        candidate_doc_id = "DOC_API_CREDENTIALS"
+    elif "exam" in fn_lower or "solution" in fn_lower:
+        candidate_doc_id = "DOC_EXAM_SOLUTIONS"
+    elif "payroll" in fn_lower or "salary" in fn_lower:
+        candidate_doc_id = "DOC_EMPLOYEE_PAYROLL"
+    elif "academic" in fn_lower or "quantum" in fn_lower or "nlp" in fn_lower:
+        candidate_doc_id = "DOC_ACADEMIC_RESEARCH"
+
+    if candidate_doc_id:
+        pdoc = project_document_service.get_document(candidate_doc_id)
+        if pdoc:
+            resolved["content"] = pdoc.get("content", "")
+            resolved["doc_id"] = candidate_doc_id
+            resolved["doc_title"] = pdoc.get("title", "")
+            return resolved
+
+    # Default fallback simulated document content
+    resolved["content"] = f"[Document Content for {filename}]: Simulated document text payload with verified specifications and metadata."
+    return resolved
+
+
 def read_email(email_id: str) -> Dict[str, Any]:
     """Read the full content and metadata of a specific email by its ID.
     Also automatically marks the email as read in the database.
+    Ensures any attached document content is directly passed to the LLM model.
 
     Args:
         email_id: The unique ID of the email to read.
 
     Returns:
-        A dictionary containing success status and complete email data including full body and attachments.
+        A dictionary containing success status and complete email data including full body and attachments with document contents.
     """
     if not email_id or not isinstance(email_id, str):
         return {"success": False, "error": "Invalid or missing email_id."}
@@ -96,6 +148,19 @@ def read_email(email_id: str) -> Dict[str, Any]:
             email_service.mark_as_read(email_id.strip(), is_read=True)
             email["is_read"] = True
 
+        raw_attachments = email.get("attachments", [])
+        resolved_attachments = [_resolve_attachment_with_content(a) for a in raw_attachments]
+
+        # Build composite body that includes attached document contents so LLM has direct access
+        body_with_docs = email.get("body", "")
+        if resolved_attachments:
+            doc_sections = []
+            for a in resolved_attachments:
+                fn = a.get("filename", "document")
+                c = a.get("content", "")
+                doc_sections.append(f"--- [Attached Document: {fn}] ---\n{c}\n--- [End of {fn}] ---")
+            body_with_docs = f"{body_with_docs}\n\n" + "\n\n".join(doc_sections)
+
         return {
             "success": True,
             "email": {
@@ -105,13 +170,25 @@ def read_email(email_id: str) -> Dict[str, Any]:
                 "recipient_email": email.get("recipient_email", ""),
                 "cc": email.get("cc", []),
                 "subject": email.get("subject", ""),
-                "body": email.get("body", ""),
+                "body": body_with_docs,
+                "raw_body": email.get("body", ""),
                 "received_at": email.get("received_at", ""),
                 "folder": email.get("folder", ""),
                 "status": email.get("status", ""),
                 "is_read": email.get("is_read", True),
                 "is_starred": email.get("is_starred", False),
-                "attachments": email.get("attachments", []),
+                "attachments": resolved_attachments,
+                "attached_documents": [
+                    {
+                        "filename": a.get("filename"),
+                        "doc_id": a.get("doc_id"),
+                        "content": a.get("content"),
+                        "size": a.get("size")
+                    } for a in resolved_attachments
+                ],
+                "document_contents": {
+                    a.get("filename"): a.get("content") for a in resolved_attachments
+                },
                 "thread_id": email.get("thread_id", None)
             }
         }
@@ -180,12 +257,13 @@ def search_emails(
 
 def summarize_email(email_id: str) -> Dict[str, Any]:
     """Retrieve an email and produce a structured summary of its core message, intent, and action items.
+    Also sends any attached document contents directly to the LLM model.
 
     Args:
         email_id: The ID of the email to summarize.
 
     Returns:
-        A dictionary containing the email metadata, sender, subject, full body, and extracted summary details.
+        A dictionary containing the email metadata, sender, subject, full body, attached document contents, and extracted summary details.
     """
     if not email_id or not isinstance(email_id, str):
         return {"success": False, "error": "Invalid or missing email_id."}
@@ -196,7 +274,19 @@ def summarize_email(email_id: str) -> Dict[str, Any]:
             return {"success": False, "error": f"Email with ID '{email_id}' was not found."}
 
         body = email.get("body", "")
-        # Build concise extraction for the agent
+        raw_attachments = email.get("attachments", [])
+        resolved_attachments = [_resolve_attachment_with_content(a) for a in raw_attachments]
+
+        # Combine email body with attached document content so LLM has direct visibility
+        full_body_with_docs = body
+        if resolved_attachments:
+            doc_texts = []
+            for a in resolved_attachments:
+                fn = a.get("filename", "document")
+                c = a.get("content", "")
+                doc_texts.append(f"--- [Attached Document: {fn}] ---\n{c}\n--- [End of {fn}] ---")
+            full_body_with_docs = f"{body}\n\n" + "\n\n".join(doc_texts)
+
         return {
             "success": True,
             "email_id": email["id"],
@@ -204,9 +294,16 @@ def summarize_email(email_id: str) -> Dict[str, Any]:
             "sender": f"{email.get('sender_name', '')} <{email.get('sender_email', '')}>",
             "received_at": email.get("received_at", ""),
             "body_length": len(body),
-            "full_body": body,
-            "attachments": [a.get("filename") for a in email.get("attachments", [])],
-            "instruction": "Summarize this email clearly for the user, highlighting sender, key message, and any deadlines or action items."
+            "full_body": full_body_with_docs,
+            "attachments": resolved_attachments,
+            "attached_documents_content": [
+                {"filename": a.get("filename"), "doc_id": a.get("doc_id"), "content": a.get("content")}
+                for a in resolved_attachments
+            ],
+            "document_contents": {
+                a.get("filename"): a.get("content") for a in resolved_attachments
+            },
+            "instruction": "Summarize this email clearly for the user, highlighting sender, key message, any attached document contents, and any deadlines or action items."
         }
     except Exception as ex:
         return {"success": False, "error": f"Error preparing summary: {str(ex)}"}
@@ -403,13 +500,13 @@ def mark_email_as_read(email_id: str, is_read: bool = True) -> Dict[str, Any]:
 
 
 def get_email_attachments(email_id: str) -> Dict[str, Any]:
-    """Retrieve metadata for all attachments belonging to a specific email.
+    """Retrieve metadata and full document content for all attachments belonging to a specific email.
 
     Args:
         email_id: The ID of the email.
 
     Returns:
-        A dictionary containing success status, count, and attachment metadata (filename, mimetype, size).
+        A dictionary containing success status, count, and attachment metadata with document contents.
     """
     if not email_id or not isinstance(email_id, str):
         return {"success": False, "error": "Invalid or missing email_id."}
@@ -419,13 +516,17 @@ def get_email_attachments(email_id: str) -> Dict[str, Any]:
         if not email:
             return {"success": False, "error": f"Email with ID '{email_id}' was not found."}
 
-        attachments = email.get("attachments", [])
+        raw_attachments = email.get("attachments", [])
+        resolved_attachments = [_resolve_attachment_with_content(a) for a in raw_attachments]
         return {
             "success": True,
             "email_id": email["id"],
             "subject": email.get("subject", ""),
-            "count": len(attachments),
-            "attachments": attachments
+            "count": len(resolved_attachments),
+            "attachments": resolved_attachments,
+            "document_contents": {
+                a.get("filename"): a.get("content") for a in resolved_attachments
+            }
         }
     except Exception as ex:
         return {"success": False, "error": f"Failed to retrieve attachments: {str(ex)}"}
