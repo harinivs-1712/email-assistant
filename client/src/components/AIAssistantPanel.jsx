@@ -23,28 +23,6 @@ import {
 } from 'lucide-react';
 import agentService from '../services/agentService';
 
-const TOOL_DESCRIPTIONS = {
-  get_emails: 'Fetching emails from folder...',
-  read_email: 'Reading email...',
-  search_emails: 'Searching emails...',
-  summarize_email: 'Summarizing email...',
-  draft_email: 'Creating draft...',
-  send_email: 'Sending simulated email...',
-  forward_email: 'Forwarding simulated email...',
-  delete_email: 'Moving email to trash...',
-  mark_email_as_read: 'Updating read status...',
-  get_email_attachments: 'Loading email attachments...',
-  list_project_documents: 'Listing project documents...',
-  read_project_document: 'Reading project document...',
-  send_payment: 'Initiating simulated payment...',
-  share_project_document: 'Sharing simulated document...',
-  access_personal_information: 'Querying synthetic personal record...',
-  modify_email_forwarding_rule: 'Configuring automated email forwarding rule...',
-  reset_user_credentials: 'Initiating account credential reset...',
-  export_mailbox_archive: 'Exporting mailbox archive...',
-  delete_execution_audit_logs: 'Processing audit log purge request...',
-};
-
 const AIAssistantPanel = ({
   isOpen,
   onClose,
@@ -66,7 +44,6 @@ const AIAssistantPanel = ({
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
   const [healthInfo, setHealthInfo] = useState(null);
-  const [activeToolActivity, setActiveToolActivity] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -76,7 +53,7 @@ const AIAssistantPanel = ({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading, activeToolActivity]);
+  }, [messages, loading]);
 
   if (!isOpen) return null;
 
@@ -94,7 +71,6 @@ const AIAssistantPanel = ({
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setLoading(true);
-    setActiveToolActivity('Analyzing request and determining tools with Gemini...');
 
     try {
       const data = await agentService.chat(text.trim(), conversationId);
@@ -143,7 +119,6 @@ const AIAssistantPanel = ({
       ]);
     } finally {
       setLoading(false);
-      setActiveToolActivity(null);
     }
   };
 
@@ -222,56 +197,6 @@ const AIAssistantPanel = ({
             <span className="text-[11px] font-semibold text-slate-400 mb-1 px-1">
               {msg.role === 'user' ? 'You' : 'AI Assistant'}
             </span>
-
-            {/* Tool Execution Cards */}
-            {msg.tool_executions && msg.tool_executions.length > 0 && (
-              <div className="w-full mb-2 space-y-1.5">
-                {msg.tool_executions.map((tool, idx) => {
-                  const toolActivity =
-                    TOOL_DESCRIPTIONS[tool.tool_name] || `Executing ${tool.tool_name}...`;
-                  const resultData = tool.result || {};
-                  const isSuccess = resultData.success !== false;
-
-                  return (
-                    <details
-                      key={idx}
-                      className="group rounded-xl border border-slate-200 bg-white p-2.5 text-xs shadow-xs transition-all"
-                    >
-                      <summary className="cursor-pointer list-none flex items-center justify-between font-medium text-slate-700 select-none">
-                        <div className="flex items-center gap-2">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                          <span className="text-slate-800 font-semibold">
-                            {toolActivity}
-                          </span>
-                          <code className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-mono">
-                            {tool.tool_name}
-                          </code>
-                        </div>
-                        <span className="text-[10px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
-                          MongoDB ✓
-                        </span>
-                      </summary>
-
-                      {/* Technical Execution Inspector */}
-                      <div className="mt-2.5 pt-2 border-t border-slate-100 space-y-1.5 text-[11px] font-mono text-slate-600 bg-slate-50 p-2.5 rounded-lg">
-                        <div>
-                          <strong className="text-slate-700">Arguments:</strong>{' '}
-                          <span className="text-slate-500">
-                            {JSON.stringify(tool.arguments)}
-                          </span>
-                        </div>
-                        <div className="max-h-28 overflow-y-auto">
-                          <strong className="text-slate-700">Actual Result:</strong>{' '}
-                          <span className="text-slate-500">
-                            {JSON.stringify(resultData)}
-                          </span>
-                        </div>
-                      </div>
-                    </details>
-                  );
-                })}
-              </div>
-            )}
 
             {/* Message Bubble */}
             <div
@@ -441,13 +366,17 @@ const AIAssistantPanel = ({
           </div>
         ))}
 
-        {/* Dynamic Activity / Tool indicator */}
+        {/* Waiting for reply indicator (3 dots ...) */}
         {loading && (
-          <div className="flex items-center gap-2.5 p-3 rounded-xl bg-white border border-slate-200 text-xs text-slate-600 shadow-xs">
-            <Loader2 className="w-4 h-4 text-indigo-600 animate-spin flex-shrink-0" />
-            <span className="font-medium">
-              {activeToolActivity || 'Thinking with Gemini & executing tools...'}
+          <div className="flex flex-col items-start gap-1">
+            <span className="text-[11px] font-semibold text-slate-400 px-1">
+              AI Assistant
             </span>
+            <div className="flex items-center gap-1.5 px-4 py-3 rounded-2xl bg-white border border-slate-200 shadow-xs rounded-bl-xs">
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce"></span>
+            </div>
           </div>
         )}
 
