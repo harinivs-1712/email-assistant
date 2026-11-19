@@ -17,6 +17,7 @@ const FirewallToggleButton = ({ onToggle, compact = false, className = '' }) => 
     package_name: 'None',
   });
   const [loading, setLoading] = useState(false);
+  const [toggleError, setToggleError] = useState('');
 
   // Load initial status
   useEffect(() => {
@@ -52,6 +53,7 @@ const FirewallToggleButton = ({ onToggle, compact = false, className = '' }) => 
     e.stopPropagation();
     if (loading) return;
     setLoading(true);
+    setToggleError('');
 
     try {
       const updated = await agentService.toggleFirewall();
@@ -61,6 +63,11 @@ const FirewallToggleButton = ({ onToggle, compact = false, className = '' }) => 
       }
     } catch (err) {
       console.error('Failed to toggle firewall state:', err);
+      setToggleError(
+        err.code === 'ECONNABORTED'
+          ? 'The firewall service did not respond. Check that the Python agent is running.'
+          : 'Could not change firewall state. Check that the Python agent is running.'
+      );
     } finally {
       setLoading(false);
     }
@@ -73,11 +80,11 @@ const FirewallToggleButton = ({ onToggle, compact = false, className = '' }) => 
       <button
         onClick={handleToggle}
         disabled={loading}
-        title={
+        title={toggleError || (
           isIncluded
             ? `Firewall is INCLUDED (${firewall.package_name || 'Active'}). Click to disable.`
             : 'Firewall is ABSENT (Baseline mode). Click to include firewall.'
-        }
+        )}
         className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all shadow-2xs border cursor-pointer select-none ${
           isIncluded
             ? 'bg-emerald-50 border-emerald-300 text-emerald-800 hover:bg-emerald-100'
@@ -92,7 +99,7 @@ const FirewallToggleButton = ({ onToggle, compact = false, className = '' }) => 
           <ShieldAlert className="w-3 h-3 text-slate-400" />
         )}
         <span className="text-[11px] font-semibold">
-          {isIncluded ? 'Firewall: Included' : 'Firewall: Absent'}
+          {toggleError ? 'Firewall: Unavailable' : (isIncluded ? 'Firewall: Included' : 'Firewall: Absent')}
         </span>
       </button>
     );
@@ -102,11 +109,11 @@ const FirewallToggleButton = ({ onToggle, compact = false, className = '' }) => 
     <button
       onClick={handleToggle}
       disabled={loading}
-      title={
+      title={toggleError || (
         isIncluded
           ? `Security Firewall is INCLUDED & ACTIVE (${firewall.package_name || 'Active'}). Tool calls are inspected. Click to turn OFF.`
           : 'Security Firewall is ABSENT. Direct tool execution in baseline mode. Click to turn ON.'
-      }
+      )}
       className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-all shadow-xs border cursor-pointer select-none group ${
         isIncluded
           ? 'bg-emerald-50/90 border-emerald-300 text-emerald-900 hover:bg-emerald-100 hover:border-emerald-400'
@@ -139,19 +146,21 @@ const FirewallToggleButton = ({ onToggle, compact = false, className = '' }) => 
 
         {/* Text */}
         <span className="font-semibold text-xs tracking-tight">
-          {isIncluded ? 'Firewall: Included' : 'Firewall: Absent'}
+          {toggleError ? 'Firewall: Unavailable' : (isIncluded ? 'Firewall: Included' : 'Firewall: Absent')}
         </span>
       </div>
 
       {/* Pill Badge */}
       <span
         className={`text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded ${
-          isIncluded
+          toggleError
+            ? 'bg-rose-100 text-rose-700'
+            : isIncluded
             ? 'bg-emerald-200/70 text-emerald-800'
             : 'bg-slate-200 text-slate-600'
         }`}
       >
-        {isIncluded ? 'Active' : 'Off'}
+        {toggleError ? 'Error' : (isIncluded ? 'Active' : 'Off')}
       </span>
     </button>
   );

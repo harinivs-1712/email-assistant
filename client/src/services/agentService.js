@@ -37,7 +37,7 @@ export const agentService = {
     api.get('/agent/firewall').then((r) => r.data),
 
   toggleFirewall: () =>
-    api.post('/agent/firewall/toggle').then((r) => r.data),
+    api.post('/agent/firewall/toggle', {}, { timeout: 12000 }).then((r) => r.data),
 
   setFirewall: (enabled) =>
     api.post('/agent/firewall/set', { enabled }).then((r) => r.data),
