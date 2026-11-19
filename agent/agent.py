@@ -11,6 +11,8 @@ from agent.conversation_manager import conversation_manager
 from agent.gemini_service import gemini_service
 from agent.system_prompt import EMAIL_ASSISTANT_SYSTEM_PROMPT
 from agent.tool_executor import tool_executor
+from agent.prompt_firewall import get_prompt_firewall, new_scan_id
+from agent.firewall_manager import firewall_manager
 
 
 class EmailAssistantAgent:
@@ -62,6 +64,16 @@ class EmailAssistantAgent:
                 conv = conversation_manager.create_conversation(title=user_input[:40], conv_id=conv_id)
                 conv_id = conv["conversation_id"]
 
+        prompt_firewall = None
+        firewall_session = None
+        if firewall_manager.enabled:
+            prompt_firewall = get_prompt_firewall()
+            firewall_session = prompt_firewall.start_session(user_input, conv_id)
+            prompt_firewall.scan(
+                firewall_session, user_input, source="email",
+                doc_id=new_scan_id("user-input"),
+            )
+
         # 2. Record user message in persistent history
         conversation_manager.add_message(
             conversation_id=conv_id,
@@ -75,11 +87,25 @@ class EmailAssistantAgent:
         # Build message history for Gemini
         conversation_turns: List[Dict[str, Any]] = []
         for h in history:
+            stored_tool_results = h.get("tool_results", [])
+            if prompt_firewall and firewall_session and isinstance(stored_tool_results, list):
+                stored_tool_results = [
+                    {
+                        **item,
+                        "result": prompt_firewall.scan_tool_result(
+                            firewall_session,
+                            str(item.get("name", "tool_output")),
+                            item.get("result"),
+                        ),
+                    }
+                    if isinstance(item, dict) and "result" in item else item
+                    for item in stored_tool_results
+                ]
             conversation_turns.append({
                 "role": h.get("role", "user"),
                 "content": h.get("content", ""),
                 "tool_calls": h.get("tool_calls", []),
-                "tool_results": h.get("tool_results", [])
+                "tool_results": stored_tool_results
             })
 
         turn_tool_executions: List[Dict[str, Any]] = []
@@ -109,6 +135,11 @@ class EmailAssistantAgent:
 
                     # Execute the real tool against MongoDB
                     result = tool_executor.execute(fn_name, fn_args, conversation_id=conv_id)
+
+                    # Scan returned email/document content before it is placed back
+                    # into the model context. Audit records contain metadata only.
+                    if prompt_firewall and firewall_session and isinstance(result, (dict, list, tuple, str)):
+                        result = prompt_firewall.scan_tool_result(firewall_session, fn_name, result)
 
                     exec_record = {
                         "call_id": call_id,

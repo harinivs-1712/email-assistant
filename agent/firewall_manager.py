@@ -84,6 +84,13 @@ class FirewallManager:
             res = base_fn(tool_name, arguments, conversation_id)
             if isinstance(res, dict) and not res.get("allowed", True):
                 self.block_count += 1
+                try:
+                    from agent.prompt_firewall import get_prompt_firewall
+                    get_prompt_firewall().record_tool_detection(
+                        tool_name, conversation_id, str(res.get("reason", "Blocked by firewall"))
+                    )
+                except Exception as audit_error:
+                    print(f"⚠️ [FirewallManager] Could not persist firewall detection: {audit_error}")
             else:
                 self.pass_count += 1
             return res
@@ -142,7 +149,7 @@ class FirewallManager:
         package = (
             self.custom_package_name
             if self.custom_authorizer
-            else ("Built-in Guard" if self.enabled else "None")
+            else ("Prompt Injection Firewall + Built-in Guard" if self.enabled else "None")
         )
         return {
             "success": True,

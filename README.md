@@ -4,6 +4,14 @@ An end-to-end intelligent simulated email management system and autonomous AI Em
 
 ---
 
+## Prompt Injection Firewall Integration
+
+The agent can use the sibling Prompt Injection Firewall project for Layer 1 content scans. The existing **Firewall** toggle controls these scans. When enabled, each agent turn and returned tool content is scanned before tool output is sent back to Gemini. High risk tool output is withheld. Detection events contain metadata only and are appended to the firewall's hash chained audit database for the dashboard.
+
+The integration defaults to `C:\Users\RAHUL S\Downloads\prompt-injection-firewall` and `var/demo/audit.sqlite` in that project. Install the firewall's core package in the same Python environment as the agent (`python -m pip install -e "C:\Users\RAHUL S\Downloads\prompt-injection-firewall"`). To use a different checkout or dashboard database, set `PROMPT_FIREWALL_PATH` and `FIREWALL_AUDIT_DB` for the agent process. `FIREWALL_AUDIT_DB` must point to the same SQLite file configured for the firewall dashboard. Layer 1 uses its offline cache and rules by default; set `PROMPT_FIREWALL_LIVE_SCAN=1` to enable its optional live judge path.
+
+---
+
 ## 🏛️ Architecture Overview
 
 ```
