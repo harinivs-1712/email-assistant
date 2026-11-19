@@ -1,0 +1,12 @@
+policy_version: "email-assistant-v1"
+agent_name: "Email Assistant"
+
+# Required by the firewall policy loader. The adapter uses this policy for
+# content scans and audit recording; the Email Assistant keeps its existing
+# tool-call authorization path.
+tools:
+  email_content_scan:
+    description: "Scan untrusted email and assistant content."
+    risk: low
+    side_effects: false
+    args: {}

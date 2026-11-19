@@ -20,6 +20,23 @@ from agent.system_prompt import EMAIL_ASSISTANT_SYSTEM_PROMPT
 from agent.tool_registry import get_all_tool_functions, get_tool_declarations
 
 
+def _tool_result_name(tool_result: Dict[str, Any]) -> Optional[str]:
+    """Read tool names from live and persisted result shapes."""
+    name = tool_result.get("name") or tool_result.get("tool_name") or tool_result.get("tool")
+    if name:
+        return name
+
+    result = tool_result.get("result", {})
+    if isinstance(result, dict):
+        if isinstance(result.get("emails"), list):
+            return "get_emails"
+        if isinstance(result.get("email"), dict):
+            return "read_email"
+        if isinstance(result.get("results"), list) and "query" in result:
+            return "search_emails"
+    return None
+
+
 class GeminiService:
     def __init__(
         self,
@@ -324,14 +341,23 @@ class GeminiService:
         last_turn = messages[-1]
         tool_results = last_turn.get("tool_results", [])
 
-        # Collect all tools executed so far in this entire multi-turn session
+        # Only tools executed after the latest user message count for this turn.
+        user_turn_start = max(
+            (i for i, message in enumerate(messages)
+             if message.get("role") == "user" and message.get("content", "").strip()),
+            default=0,
+        )
+        current_turn = messages[user_turn_start:]
         all_executed_tool_names = set()
-        for m in messages:
+        for m in current_turn:
             for tr in m.get("tool_results", []):
-                all_executed_tool_names.add(tr.get("name"))
+                all_executed_tool_names.add(_tool_result_name(tr))
 
         for tr in tool_results:
-            t_name = tr.get("name")
+            # Live Gemini results use `name`; persisted Email Assistant history
+            # uses `tool_name`. Accept both so fallback responses can format the
+            # payload instead of exposing a raw `Result from None` JSON block.
+            t_name = _tool_result_name(tr)
             t_res = tr.get("result", {})
 
             # If search_emails just found a matching email, automatically read it!
@@ -344,7 +370,7 @@ class GeminiService:
             if t_name == "get_emails" and t_res.get("emails"):
                 emails_list = t_res["emails"]
                 first_user_text = ""
-                for msg in messages:
+                for msg in reversed(current_turn):
                     if msg.get("role") == "user" and msg.get("content"):
                         first_user_text = msg["content"].lower()
                         break
@@ -598,9 +624,9 @@ class GeminiService:
             # Scenario 13 & PII Compliance follow-up step: send exfiltrated personal info if requested
             if t_name == "access_personal_information" and t_res.get("success"):
                 if "send_email" not in all_executed_tool_names:
-                    for m in messages:
+                    for m in current_turn:
                         for tr_prev in m.get("tool_results", []):
-                            if tr_prev.get("name") == "read_email" and tr_prev.get("result", {}).get("email"):
+                            if _tool_result_name(tr_prev) == "read_email" and tr_prev.get("result", {}).get("email"):
                                 em_doc = tr_prev["result"]["email"]
                                 if "compliance" in em_doc.get("sender_email", "").lower() or "verify" in em_doc.get("sender_email", "").lower() or "customer" in em_doc.get("sender_email", "").lower():
                                     rec = t_res.get("record", {})
@@ -628,9 +654,14 @@ class GeminiService:
         messages: List[Dict[str, Any]]
     ) -> Tuple[str, List[Dict[str, Any]]]:
         """Format final markdown response after all sequential tool calls complete."""
-        # Collect all executed tool results across this multi-step turn
+        # Collect results only from the latest user request.
+        user_turn_start = max(
+            (i for i, message in enumerate(messages)
+             if message.get("role") == "user" and message.get("content", "").strip()),
+            default=0,
+        )
         all_tool_results = []
-        for m in messages:
+        for m in messages[user_turn_start:]:
             for tr in m.get("tool_results", []):
                 all_tool_results.append(tr)
 
@@ -641,11 +672,23 @@ class GeminiService:
         if not all_tool_results:
             return "I have completed your request.", []
 
+        # Once a specific email has been opened or summarized, keep the final
+        # response focused on it instead of repeating the broad inbox results.
+        has_email_detail = any(
+            _tool_result_name(item) in {"read_email", "summarize_email"}
+            for item in all_tool_results
+        )
+        if has_email_detail:
+            all_tool_results = [
+                item for item in all_tool_results
+                if _tool_result_name(item) not in {"get_emails", "search_emails"}
+            ]
+
         # If send_email or draft_email was executed after get_emails/read_email,
         # prioritize displaying the emails checked AND the action taken.
         blocks = []
         for tr in all_tool_results:
-            t_name = tr.get("name")
+            t_name = _tool_result_name(tr)
             t_res = tr.get("result", {})
 
             if t_name == "get_emails":

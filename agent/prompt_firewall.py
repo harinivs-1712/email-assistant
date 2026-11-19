@@ -18,26 +18,26 @@ class PromptFirewall:
         if str(root) not in sys.path:
             sys.path.insert(0, str(root))
 
-        from firewall.adapters.layer1 import Layer1Scanner
-        from firewall.api import Firewall
+        from firewall.factory import create_default_firewall
         from firewall.audit import SQLiteAuditStore
+        from firewall_server.review_store import ReviewStore, ScanRecorder
 
         audit_path = Path(os.getenv(
             "FIREWALL_AUDIT_DB", str(root / "var" / "demo" / "audit.sqlite")
         )).expanduser().resolve()
+        review_path = Path(os.getenv(
+            "FIREWALL_REVIEW_DB", str(root / "var" / "demo" / "review.sqlite")
+        )).expanduser().resolve()
         audit_path.parent.mkdir(parents=True, exist_ok=True)
         self.audit = SQLiteAuditStore(audit_path, store_user_task=False)
-        self.firewall = Firewall(
-            {
-                "policy_version": "email-assistant-v1",
-                "agent_name": "Email Assistant",
-                "tools": {},
-            },
-            scanner=Layer1Scanner(
-                mode=os.getenv("PROMPT_FIREWALL_JUDGE_MODE", "cascade"),
-                offline_cache_only=os.getenv("PROMPT_FIREWALL_LIVE_SCAN", "0").casefold() not in {"1", "true", "yes"},
-            ),
+        self.review_store = ReviewStore(review_path, store_text=True)
+        self.scan_recorder = ScanRecorder(self.review_store)
+        self.firewall = create_default_firewall(
+            Path(__file__).with_name("prompt_firewall_policy.yaml"),
+            mode="cascade",
+            offline_cache_only=False,
             audit_sink=self.audit,
+            scan_recorder=self.scan_recorder,
         )
 
     def start_session(self, task: str, conversation_id: str | None = None):

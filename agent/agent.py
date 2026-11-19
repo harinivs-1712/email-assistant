@@ -4,6 +4,7 @@ and telemetry logging.
 """
 
 from datetime import datetime, timezone
+import re
 from typing import Any, Dict, List, Optional
 import uuid
 
@@ -23,6 +24,78 @@ class EmailAssistantAgent:
     ):
         self.max_tool_iterations = max_tool_iterations
         self.system_prompt = system_prompt
+
+    @staticmethod
+    def _is_raw_tool_dump(response: Optional[str]) -> bool:
+        if not isinstance(response, str):
+            return False
+        text = response.lstrip().lower()
+        if "result from" in text[:1000] and "{" in text[:1500]:
+            return True
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*", "", text)
+        if text.startswith("{") and any(
+            marker in text[:1500] for marker in (
+                '"emails"', '"sender_email"', '"success"', '"results"',
+                '"tool_name"', '"email"',
+            )
+        ):
+            return True
+        # Catch a model that wraps the tool payload in a short sentence.
+        return any(marker in text[:1500] for marker in (
+            '"emails": [', '"sender_email":', '"tool_name":',
+        )) and ("{" in text[:1500] or "```json" in text[:1500])
+
+    @staticmethod
+    def _find_requested_email_to_review(
+        user_request: str,
+        executions: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Resolve an explicitly named email from prior list/search results."""
+        text = user_request.casefold()
+        if not re.search(r"\b(review|read|check|inspect|summari[sz]e)\b", text):
+            return None
+        if any(item.get("tool_name") == "read_email" for item in executions):
+            return None
+
+        target_match = re.search(
+            r"\b(?:review|read|check|inspect|summari[sz]e)\s+(?:the\s+)?(.+?)\s+(?:email|message)\b",
+            text,
+        )
+        if not target_match:
+            target_match = re.search(
+                r"\b(?:email|message)\s+from\s+(.+?)(?:\s+in\s+|\s+and\s+|$)", text
+            )
+        if not target_match:
+            return None
+
+        stop_words = {"the", "my", "a", "an", "in", "from", "present", "inbox", "please"}
+        target_terms = {
+            token for token in re.findall(r"[a-z0-9]+", target_match.group(1))
+            if len(token) > 2 and token not in stop_words
+        }
+        if not target_terms:
+            return None
+
+        candidates = []
+        for item in executions:
+            result = item.get("result", {})
+            if item.get("tool_name") == "get_emails":
+                candidates.extend(result.get("emails", []))
+            elif item.get("tool_name") == "search_emails":
+                candidates.extend(result.get("results", []))
+
+        best_email, best_score = None, 0
+        for email in candidates:
+            searchable = " ".join(str(email.get(field, "")) for field in (
+                "sender_name", "sender_email", "subject", "snippet"
+            )).casefold()
+            score = sum(term in searchable for term in target_terms)
+            if score > best_score:
+                best_email, best_score = email, score
+        if not best_email or not best_email.get("id"):
+            return None
+        return {"name": "read_email", "args": {"email_id": best_email["id"]}}
 
     def chat(
         self,
@@ -123,6 +196,13 @@ class EmailAssistantAgent:
                 system_instruction=self.system_prompt
             )
 
+            # Honor an explicit request to review a named email even if the
+            # model only returned a generic inbox listing.
+            if not function_calls:
+                review_call = self._find_requested_email_to_review(user_input, turn_tool_executions)
+                if review_call:
+                    function_calls = [review_call]
+
             # Check if Gemini wants to call tools
             if function_calls:
                 print(f"⚡ [Agent Loop] Gemini requested {len(function_calls)} tool call(s): {[fc['name'] for fc in function_calls]}")
@@ -179,6 +259,24 @@ class EmailAssistantAgent:
                 "I completed the requested email operations, but was unable to generate a final summary. "
                 "Please check your email list."
             )
+
+        # Some model/fallback responses echo the tool payload instead of
+        # explaining it. Normalize those at the API boundary so the UI never
+        # presents `Result from None` or a raw get_emails JSON object.
+        if turn_tool_executions and self._is_raw_tool_dump(final_text_response):
+            normalized_results = [
+                {
+                    "tool_name": execution.get("tool_name"),
+                    "result": execution.get("result", {}),
+                }
+                for execution in turn_tool_executions
+            ]
+            formatted, _ = gemini_service._format_final_response([
+                {"role": "user", "content": user_input},
+                {"role": "user", "content": "", "tool_results": normalized_results},
+            ])
+            if formatted:
+                final_text_response = formatted
 
         # 5. Persist assistant's final response and tool executions in conversation history
         conversation_manager.add_message(
